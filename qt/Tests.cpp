@@ -1,0 +1,9 @@
+#include "MarkdownCore.h"
+#include "PluginInterface.h"
+#include <QApplication>
+#include <QLibrary>
+#include <QTemporaryDir>
+#include <cstdlib>
+#include <iostream>
+static size_t NPP_PLUGIN_CALL doc(void*,uint8_t*,size_t){return 0;}static void require(bool v,const char*m){if(!v){std::cerr<<m<<'\n';std::exit(1);}}
+int main(int argc,char**argv){require(MarkdownCore::toHtml(QStringLiteral("# X")).contains(QStringLiteral("<h1>X</h1>")),"markdown core");QApplication app(argc,argv);QLibrary l(QString::fromUtf8(NPP_MARKDOWN_PANEL_PATH));require(l.load(),qPrintable(l.errorString()));auto name=reinterpret_cast<const char*(*)()>(l.resolve("nppGetName"));auto set=reinterpret_cast<int(*)(const NppPluginHostInfo*)>(l.resolve("nppSetInfo"));auto funcs=reinterpret_cast<const NppPluginFuncItem*(*)(uint32_t*)>(l.resolve("nppGetFuncsArray"));auto legacyName=reinterpret_cast<const wchar_t*(*)()>(l.resolve("getName"));auto legacyFuncs=reinterpret_cast<void*(*)(int*)>(l.resolve("getFuncsArray"));require(name&&set&&funcs&&legacyName&&legacyFuncs,"ABI");QTemporaryDir d;QByteArray p=d.path().toUtf8();NppPluginHostInfo h{};h.struct_size=sizeof(h);h.abi_version=1;h.plugin_config_path_utf8=p.constData();h.get_current_document=doc;require(set(&h),"setInfo");uint32_t c=0;require(funcs(&c)&&c==4&&QByteArray(name())=="NppMarkdownPanel-qt","identity");int legacyCount=-1;require(legacyFuncs(&legacyCount)==nullptr&&legacyCount==0&&QString::fromWCharArray(legacyName())==QStringLiteral("NppMarkdownPanel-qt"),"empty legacy ABI");return 0;}
