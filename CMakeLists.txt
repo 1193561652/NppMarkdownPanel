@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(NppMarkdownPanelQt LANGUAGES CXX)
+project(NppMarkdownPanelQt
+    DESCRIPTION "Independent Qt port of NppMarkdownPanel by Jiang Liwei"
+    HOMEPAGE_URL "https://github.com/1193561652/NppMarkdownPanel/tree/qt-port"
+    LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets)

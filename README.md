@@ -1,6 +1,12 @@
 # NppMarkdownPanel
 Plugin to preview Markdown files in Notepad++
 
+> **Qt port:** The `qt-port` branch is an independent port for Notepad++ for
+> Qt. Qt port author: **Jiang Liwei**. Source:
+> <https://github.com/1193561652/NppMarkdownPanel/tree/qt-port>. Original:
+> <https://github.com/mohzy83/NppMarkdownPanel>. License and attribution:
+> [QT_PORT_NOTICE.md](QT_PORT_NOTICE.md).
+
 - lightweight plugin to preview markdown within Notepad++
 - displaying rendered markdown html with embedded IE11
 - can save rendered html to a file

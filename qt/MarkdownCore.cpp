@@ -1,3 +1,5 @@
+// NppMarkdownPanel-qt implementation by Jiang Liwei. SPDX-License-Identifier: MIT
+
 #include "MarkdownCore.h"
 #include <QRegularExpression>
 #include <QStringList>

@@ -1,3 +1,11 @@
+/*
+ * NppMarkdownPanel-qt, an independent Qt port by Jiang Liwei.
+ * Qt port Copyright (c) 2026 Jiang Liwei.
+ * Port: https://github.com/1193561652/NppMarkdownPanel/tree/qt-port
+ * Original: https://github.com/mohzy83/NppMarkdownPanel
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "MarkdownCore.h"
 #include "PluginInterface.h"
 #include <QApplication>
@@ -33,7 +41,7 @@ void render(){if(!preview)return;preview->setHtml(MarkdownCore::toHtml(QString::
 void scheduleRender(){if(!dock||!dock->isVisible())return;if(!renderTimer){renderTimer=new QTimer(QApplication::instance());renderTimer->setSingleShot(true);QObject::connect(renderTimer,&QTimer::timeout,&render);}renderTimer->start(120);}
 void syncPosition(){if(!syncCaret||!preview||!host||!host->get_current_view||!host->get_first_visible_line||!host->send_scintilla)return;int view=host->get_current_view(host->host_context);qint64 first=host->get_first_visible_line(host->host_context,view);qint64 lines=host->send_scintilla(host->host_context,view,2154,0,0);if(first<0||lines<=1)return;QScrollBar*bar=preview->verticalScrollBar();bar->setValue(int(double(first)/double(lines-1)*bar->maximum()));}
 void create(){if(dock)return;QMainWindow*p=window();if(!p)return;QDockWidget*d=new QDockWidget(QStringLiteral("NppMarkdownPanel-qt"),p);d->setObjectName(QStringLiteral("NppMarkdownPanelQtDock"));QWidget*w=new QWidget(d);QVBoxLayout*l=new QVBoxLayout(w);l->setContentsMargins(0,0,0,0);QToolBar*t=new QToolBar(w);QAction*refresh=t->addAction(QStringLiteral("Refresh"));QAction*exportAction=t->addAction(QStringLiteral("Export HTML"));QTextBrowser*b=new QTextBrowser(w);b->setOpenExternalLinks(true);l->addWidget(t);l->addWidget(b,1);d->setWidget(w);p->addDockWidget(Qt::RightDockWidgetArea,d);dock=d;preview=b;toolbar=t;QObject::connect(refresh,&QAction::triggered,&render);QObject::connect(exportAction,&QAction::triggered,[]{QString file=QFileDialog::getSaveFileName(window(),QStringLiteral("Export HTML"),htmlFile,QStringLiteral("HTML (*.html)"));if(!file.isEmpty()){htmlFile=file;save();render();}});QObject::connect(d,&QObject::destroyed,[]{dock=nullptr;preview=nullptr;toolbar=nullptr;});render();d->hide();}
-void about(void*){QMessageBox::about(window(),QStringLiteral("NppMarkdownPanel-qt"),QStringLiteral("Qt port of NppMarkdownPanel 0.6.2."));}
+void about(void*){QMessageBox::about(window(),QStringLiteral("NppMarkdownPanel-qt"),QStringLiteral("Independent Qt port of NppMarkdownPanel 0.6.2 for Notepad++ for Qt.\nQt port: Jiang Liwei\nSource: https://github.com/1193561652/NppMarkdownPanel/tree/qt-port\nOriginal: https://github.com/mohzy83/NppMarkdownPanel\nLicense: MIT"));}
 void toggle(void*){create();if(dock){dock->setVisible(!dock->isVisible());if(dock->isVisible())render();}}
 void sync(void*){syncCaret=!syncCaret;save();}
 void settings(void*){QDialog d(window());d.setWindowTitle(QStringLiteral("NppMarkdownPanel-qt Settings"));QFormLayout l(&d);QSpinBox z;z.setRange(25,400);z.setValue(zoom);QLineEdit c(cssFile),h(htmlFile);QCheckBox tools;tools.setChecked(showToolbar);l.addRow(QStringLiteral("Zoom"),&z);l.addRow(QStringLiteral("CSS file"),&c);l.addRow(QStringLiteral("Automatic HTML output"),&h);l.addRow(QStringLiteral("Show toolbar"),&tools);QDialogButtonBox b(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);l.addRow(&b);QObject::connect(&b,&QDialogButtonBox::accepted,&d,&QDialog::accept);QObject::connect(&b,&QDialogButtonBox::rejected,&d,&QDialog::reject);if(d.exec()==QDialog::Accepted){zoom=z.value();cssFile=c.text();htmlFile=h.text();showToolbar=tools.isChecked();save();render();}}
