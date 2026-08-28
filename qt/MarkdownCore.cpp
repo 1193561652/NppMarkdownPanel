@@ -63,7 +63,35 @@ QString restore(QString html,const Expansion&x)
     QRegularExpression heading(QStringLiteral("<h([1-6])([^>]*)>(.*?)</h\\1>"),QRegularExpression::DotMatchesEverythingOption);int offset=0;while(true){auto m=heading.match(html,offset);if(!m.hasMatch())break;QString attrs=m.captured(2),content=m.captured(3);const QString id=slug(content);if(x.headingAttributes.contains(id))attrs+=x.headingAttributes.value(id);if(!attrs.contains(QRegularExpression(QStringLiteral("\\bid="))))attrs+=QStringLiteral(" id=\"%1\"").arg(id);const QString replacement=QStringLiteral("<h%1%2>%3</h%1>").arg(m.captured(1),attrs,content);html.replace(m.capturedStart(),m.capturedLength(),replacement);offset=m.capturedStart()+replacement.size();}
     return html;
 }
+QString alignMarkdigRuntimeMarkup(QString html)
+{
+    // UseAdvancedExtensions() only changes the emitted HTML. The original
+    // WebBrowser preview does not load Mermaid, nomnoml, MathJax, or KaTeX.
+    QRegularExpression diagram(QStringLiteral(
+        "<pre><code class=\"language-(mermaid|nomnoml)\">(.*?)</code></pre>"),
+        QRegularExpression::DotMatchesEverythingOption
+            | QRegularExpression::CaseInsensitiveOption);
+    int offset = 0;
+    while (true) {
+        const auto match = diagram.match(html, offset);
+        if (!match.hasMatch())
+            break;
+        const QString replacement = QStringLiteral("<div class=\"%1\">%2</div>")
+            .arg(match.captured(1).toLower(), match.captured(2));
+        html.replace(match.capturedStart(), match.capturedLength(), replacement);
+        offset = match.capturedStart() + replacement.size();
+    }
+    html.replace(QRegularExpression(QStringLiteral(
+        "<span class=\"math\">(.*?)</span>"),
+        QRegularExpression::DotMatchesEverythingOption),
+        QStringLiteral("<span>\\(\\1\\)</span>"));
+    html.replace(QRegularExpression(QStringLiteral(
+        "<div class=\"math math-display\">(.*?)</div>"),
+        QRegularExpression::DotMatchesEverythingOption),
+        QStringLiteral("<div>\\[\n\\1\n\\]</div>"));
+    return html;
+}
 }
 namespace MarkdownCore {
-QString toHtml(const QString&markdown,const QString&css){Expansion x=expand(markdown);QTextDocument document;document.setMarkdown(x.text,QTextDocument::MarkdownDialectGitHub);QString html=restore(document.toHtml(),x);const QString style=css.isEmpty()?QStringLiteral("body{font-family:sans-serif;margin:20px;line-height:1.5}pre,code{font-family:monospace;background:#f3f3f3}pre{padding:10px;overflow:auto}img,video{max-width:100%}table{border-collapse:collapse}th,td{border:1px solid #bbb;padding:4px 8px}.task-list-item{list-style:none}.math{font-family:serif}.footnotes{font-size:smaller}"):css;html.replace(QStringLiteral("</head>"),QStringLiteral("<style>%1</style></head>").arg(style));return html;}
+QString toHtml(const QString&markdown,const QString&css){Expansion x=expand(markdown);QTextDocument document;document.setMarkdown(x.text,QTextDocument::MarkdownDialectGitHub);QString html=alignMarkdigRuntimeMarkup(restore(document.toHtml(),x));const QString style=css.isEmpty()?QStringLiteral("body{font-family:sans-serif;margin:20px;line-height:1.5}pre,code{font-family:monospace;background:#f3f3f3}pre{padding:10px;overflow:auto}img,video{max-width:100%}table{border-collapse:collapse}th,td{border:1px solid #bbb;padding:4px 8px}.task-list-item{list-style:none}.footnotes{font-size:smaller}"):css;html.replace(QStringLiteral("</head>"),QStringLiteral("<style>%1</style></head>").arg(style));return html;}
 }

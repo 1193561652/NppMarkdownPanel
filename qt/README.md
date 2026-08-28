@@ -14,6 +14,13 @@ heading IDs, citations, containers, definition lists, emphasis extras, figures,
 footers, footnotes, grid/pipe tables, math, media, tasks, diagram fences,
 autolinks, and generic attributes.
 
+The original Markdig pipeline produces static Mermaid/nomnoml `<div>` blocks
+and mathematics delimiters; its WinForms WebBrowser does not load a diagram or
+math JavaScript runtime. The Qt port deliberately preserves that offline
+behavior. The original `style.css` is embedded as a fallback and is also
+installed next to the plugin so the `CssFileName=style.css` workflow remains
+editable and compatible.
+
 The `0.6.2` source remains the reference. This module preserves the four original
 commands, dock preview, CSS, zoom, toolbar, automatic HTML output, and INI keys.
 Legacy Notepad++ ABI exports are deliberately empty; functionality uses the new ABI.
