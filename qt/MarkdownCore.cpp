@@ -1,9 +1,20 @@
 // Independent Qt Markdown renderer. SPDX-License-Identifier: MIT
 #include "MarkdownCore.h"
+#include <QHash>
+#include <QPair>
 #include <QRegularExpression>
+#include <QStringList>
 #include <QTextDocument>
 #include <QUrl>
+#include <QVector>
+#include <QtGlobal>
 #include <functional>
+
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
+#define NPP_SKIP_EMPTY_PARTS QString::SkipEmptyParts
+#else
+#define NPP_SKIP_EMPTY_PARTS Qt::SkipEmptyParts
+#endif
 
 namespace {
 struct Expansion {
@@ -19,7 +30,7 @@ struct Expansion {
 QString attributes(QString value)
 {
     QString id;QStringList classes;QStringList extra;
-    const auto parts=value.split(QRegularExpression(QStringLiteral("\\s+")),Qt::SkipEmptyParts);
+    const auto parts=value.split(QRegularExpression(QStringLiteral("\\s+")),NPP_SKIP_EMPTY_PARTS);
     for(const QString&part:parts){if(part.startsWith('#'))id=part.mid(1);else if(part.startsWith('.'))classes.append(part.mid(1));else if(part.contains('=')){const int at=part.indexOf('=');extra.append(QStringLiteral(" %1=\"%2\"").arg(part.left(at).toHtmlEscaped(),part.mid(at+1).remove('"').toHtmlEscaped()));}}
     QString result;if(!id.isEmpty())result+=QStringLiteral(" id=\"%1\"").arg(id.toHtmlEscaped());if(!classes.isEmpty())result+=QStringLiteral(" class=\"%1\"").arg(classes.join(' ').toHtmlEscaped());return result+extra.join(QString());
 }
@@ -91,7 +102,128 @@ QString alignMarkdigRuntimeMarkup(QString html)
         QStringLiteral("<div>\\[\n\\1\n\\]</div>"));
     return html;
 }
+
+QString renderInlineMarkdown(QString text)
+{
+    text = text.toHtmlEscaped();
+    text.replace(QRegularExpression(QStringLiteral("`([^`]+)`")),
+                 QStringLiteral("<code>\\1</code>"));
+    text.replace(QRegularExpression(QStringLiteral("!\\[([^]]*)\\]\\(([^ )]+)\\)")),
+                 QStringLiteral("<img alt=\"\\1\" src=\"\\2\">"));
+    text.replace(QRegularExpression(QStringLiteral("\\[([^]]+)\\]\\(([^ )]+)\\)")),
+                 QStringLiteral("<a href=\"\\2\">\\1</a>"));
+    text.replace(QRegularExpression(QStringLiteral("\\*\\*([^*]+)\\*\\*")),
+                 QStringLiteral("<strong>\\1</strong>"));
+    text.replace(QRegularExpression(QStringLiteral("__([^_]+)__")),
+                 QStringLiteral("<strong>\\1</strong>"));
+    text.replace(QRegularExpression(QStringLiteral("~~([^~]+)~~")),
+                 QStringLiteral("<del>\\1</del>"));
+    text.replace(QRegularExpression(QStringLiteral("(?<!\\*)\\*([^*]+)\\*(?!\\*)")),
+                 QStringLiteral("<em>\\1</em>"));
+    text.replace(QRegularExpression(QStringLiteral("(?<!_)_([^_]+)_(?!_)")),
+                 QStringLiteral("<em>\\1</em>"));
+    return text;
+}
+
+QString renderBasicMarkdown(const QString& markdown)
+{
+    const QStringList lines = markdown.split(QLatin1Char('\n'));
+    QStringList output;
+    QStringList paragraph;
+    bool inList = false;
+    bool orderedList = false;
+    auto closeParagraph = [&] {
+        if (!paragraph.isEmpty()) {
+            output << QStringLiteral("<p>%1</p>")
+                          .arg(renderInlineMarkdown(paragraph.join(QLatin1Char(' '))));
+            paragraph.clear();
+        }
+    };
+    auto closeList = [&] {
+        if (inList) {
+            output << (orderedList ? QStringLiteral("</ol>")
+                                   : QStringLiteral("</ul>"));
+            inList = false;
+        }
+    };
+
+    for (int i = 0; i < lines.size(); ++i) {
+        const QString line = lines.at(i);
+        if (line.trimmed().isEmpty()) {
+            closeParagraph();
+            closeList();
+            continue;
+        }
+        const QRegularExpressionMatch heading = QRegularExpression(
+            QStringLiteral("^(#{1,6})\\s+(.+?)\\s*#*\\s*$")).match(line);
+        if (heading.hasMatch()) {
+            closeParagraph();
+            closeList();
+            const int level = heading.captured(1).size();
+            output << QStringLiteral("<h%1>%2</h%1>")
+                          .arg(level)
+                          .arg(renderInlineMarkdown(heading.captured(2)));
+            continue;
+        }
+        if (i + 1 < lines.size()
+            && QRegularExpression(QStringLiteral("^\\s*(=+|-+)\\s*$"))
+                   .match(lines.at(i + 1)).hasMatch()) {
+            closeParagraph();
+            closeList();
+            const int level = lines.at(i + 1).trimmed().startsWith(QLatin1Char('='))
+                ? 1 : 2;
+            output << QStringLiteral("<h%1>%2</h%1>")
+                          .arg(level)
+                          .arg(renderInlineMarkdown(line.trimmed()));
+            ++i;
+            continue;
+        }
+        const QRegularExpressionMatch listItem = QRegularExpression(
+            QStringLiteral("^\\s*(?:([-+*])|(\\d+)\\.)\\s+(.+)$")).match(line);
+        if (listItem.hasMatch()) {
+            closeParagraph();
+            const bool ordered = !listItem.captured(2).isEmpty();
+            if (!inList || orderedList != ordered) {
+                closeList();
+                orderedList = ordered;
+                inList = true;
+                output << (ordered ? QStringLiteral("<ol>")
+                                   : QStringLiteral("<ul>"));
+            }
+            output << QStringLiteral("<li>%1</li>")
+                          .arg(renderInlineMarkdown(listItem.captured(3)));
+            continue;
+        }
+        if (QRegularExpression(QStringLiteral("^NPPQTX\\d{6}Z$"))
+                .match(line.trimmed()).hasMatch()) {
+            closeParagraph();
+            closeList();
+            output << line.trimmed();
+            continue;
+        }
+        const QRegularExpressionMatch quote = QRegularExpression(
+            QStringLiteral("^\\s*>\\s?(.*)$")).match(line);
+        if (quote.hasMatch()) {
+            closeParagraph();
+            closeList();
+            output << QStringLiteral("<blockquote><p>%1</p></blockquote>")
+                          .arg(renderInlineMarkdown(quote.captured(1)));
+            continue;
+        }
+        paragraph << line.trimmed();
+    }
+    closeParagraph();
+    closeList();
+    return QStringLiteral("<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>%1</body></html>")
+        .arg(output.join(QLatin1Char('\n')));
+}
 }
 namespace MarkdownCore {
-QString toHtml(const QString&markdown,const QString&css){Expansion x=expand(markdown);QTextDocument document;document.setMarkdown(x.text,QTextDocument::MarkdownDialectGitHub);QString html=alignMarkdigRuntimeMarkup(restore(document.toHtml(),x));const QString style=css.isEmpty()?QStringLiteral("body{font-family:sans-serif;margin:20px;line-height:1.5}pre,code{font-family:monospace;background:#f3f3f3}pre{padding:10px;overflow:auto}img,video{max-width:100%}table{border-collapse:collapse}th,td{border:1px solid #bbb;padding:4px 8px}.task-list-item{list-style:none}.footnotes{font-size:smaller}"):css;html.replace(QStringLiteral("</head>"),QStringLiteral("<style>%1</style></head>").arg(style));return html;}
+QString toHtml(const QString&markdown,const QString&css){Expansion x=expand(markdown);QString html;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+QTextDocument document;document.setMarkdown(x.text,QTextDocument::MarkdownDialectGitHub);html=document.toHtml();
+#else
+html=renderBasicMarkdown(x.text);
+#endif
+html=alignMarkdigRuntimeMarkup(restore(html,x));const QString style=css.isEmpty()?QStringLiteral("body{font-family:sans-serif;margin:20px;line-height:1.5}pre,code{font-family:monospace;background:#f3f3f3}pre{padding:10px;overflow:auto}img,video{max-width:100%}table{border-collapse:collapse}th,td{border:1px solid #bbb;padding:4px 8px}.task-list-item{list-style:none}.footnotes{font-size:smaller}"):css;html.replace(QStringLiteral("</head>"),QStringLiteral("<style>%1</style></head>").arg(style));return html;}
 }
